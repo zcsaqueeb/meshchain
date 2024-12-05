@@ -1,9 +1,10 @@
+import requests
 import cloudscraper
 import json
 import os
 import urllib.parse
 from colorama import *
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import time
 import pytz
 
@@ -63,7 +64,7 @@ class MeshChain:
         else:
             raise ValueError("User data not found in query.")
     
-    def user_signin(self, query: str, user_id: str):
+    def user_signin(self, query: str, user_id: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/auth/telegram-miniapp-signin'
         data = json.dumps({"referral_code":"T_1493482017"})
         headers = {
@@ -71,55 +72,94 @@ class MeshChain:
             'Authorization': f'tma {query}',
             'Content-Type': 'application/json'
         }
-
-        response = self.scraper.post(url, headers=headers, data=data)
-        if response.status_code == 400:
-            self.log(
-                f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {user_id} {Style.RESET_ALL}"
-                f"{Fore.RED + Style.BRIGHT}Query Id Isn't Valid.{Style.RESET_ALL}"
-                f"{Fore.YELLOW + Style.BRIGHT} Update First {Style.RESET_ALL}"
-                f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
-            )
-            return
-        elif response.status_code == 403:
-            self.log(
-                f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {user_id} {Style.RESET_ALL}"
-                f"{Fore.RED + Style.BRIGHT}Blocked By Cloudflare.{Style.RESET_ALL}"
-                f"{Fore.YELLOW + Style.BRIGHT} Restart Again {Style.RESET_ALL}"
-                f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
-            )
-            return
+        for attempt in range(retries):
+            try:
+                response = self.scraper.post(url, headers=headers, data=data, timeout=10)
+                if response.status_code in [400, 409]:
+                    self.log(
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} {user_id} {Style.RESET_ALL}"
+                        f"{Fore.RED + Style.BRIGHT}Query Id Isn't Valid.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Update First {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                    )
+                    return
+                elif response.status_code == 403:
+                    self.log(
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} {user_id} {Style.RESET_ALL}"
+                        f"{Fore.RED + Style.BRIGHT}Blocked By Cloudflare.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Restart Again {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                    )
+                    return
         
-        response.raise_for_status()
-        return response.json()["access_token"]
+                response.raise_for_status()
+                return response.json()["access_token"]
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
     
-    def user_profile(self, token: str):
+    def user_profile(self, token: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/user/profile'
         headers = {
             **self.headers,
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json()
-
-    def user_balance(self, token: str):
+    def user_balance(self, token: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/wallet/tokens'
         headers = {
             **self.headers,
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+                return response.json()['data']
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json()['data']
-
-    def node_status(self, token: str, user_id: str):
+    def node_status(self, token: str, user_id: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/nodes/status'
         data = json.dumps({"unique_id":user_id})
         headers = {
@@ -127,12 +167,25 @@ class MeshChain:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.post(url, headers=headers, data=data, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.post(url, headers=headers, data=data)
-        response.raise_for_status()
-        return response.json()
-
-    def node_start(self, token: str, user_id: str):
+    def node_start(self, token: str, user_id: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/rewards/start'
         data = json.dumps({"unique_id":user_id})
         headers = {
@@ -140,12 +193,25 @@ class MeshChain:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.post(url, headers=headers, data=data, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.post(url, headers=headers, data=data)
-        response.raise_for_status()
-        return response.json()
-
-    def node_claim(self, token: str, user_id: str):
+    def node_claim(self, token: str, user_id: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/rewards/claim'
         data = json.dumps({"unique_id":user_id})
         headers = {
@@ -153,24 +219,50 @@ class MeshChain:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.post(url, headers=headers, data=data, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.post(url, headers=headers, data=data)
-        response.raise_for_status()
-        return response.json()
-
-    def refferal_info(self, token: str):
+    def refferal_info(self, token: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/referral/info'
         headers = {
             **self.headers,
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json()
-
-    def refferal_claim(self, token: str):
+    def refferal_claim(self, token: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/referral/claim'
         data = {}
         headers = {
@@ -178,24 +270,50 @@ class MeshChain:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.post(url, headers=headers, json=data, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        return response.json()
-
-    def mission_lists(self, token: str):
+    def mission_lists(self, token: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/mission'
         headers = {
             **self.headers,
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
+        for attempt in range(retries):
+            try:
+                response = self.scraper.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
 
-        response = self.scraper.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json()
-
-    def mission_claim(self, token: str, mission_id: str):
+    def mission_claim(self, token: str, mission_id: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/mission/claim'
         data = json.dumps({"mission_id":mission_id})
         headers = {
@@ -203,13 +321,26 @@ class MeshChain:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
-
-        response = self.scraper.post(url, headers=headers, data=data)
-        if response.status_code == 400:
-            return None
-        
-        response.raise_for_status()
-        return response.json()
+        for attempt in range(retries):
+            try:
+                response = self.scraper.post(url, headers=headers, data=data, timeout=10)
+                if response.status_code == 400:
+                    return None
+                
+                response.raise_for_status()
+                return response.json()
+            except (requests.RequestException, requests.Timeout, ValueError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}Request Timeout.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(2)
+                else:
+                    return None
                 
     def process_query(self, query: str):
         user_id = self.load_data(query)
@@ -223,14 +354,14 @@ class MeshChain:
             if profile and balances:
                 symbols = ["POINT", "BNB"]
                 balance = {item["symbol"]: item["balance"] for item in balances if item["symbol"] in symbols}
-                point = balance['POINT']
+                point = float(balance['POINT'])
                 bnb = float(balance['BNB']) / 1000000000000000000
 
                 self.log(
                     f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
                     f"{Fore.WHITE + Style.BRIGHT} {profile['name']} {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}] [ Balance{Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT} {point} Point {Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} {point:.2f} Point {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.WHITE + Style.BRIGHT} {bnb} BNB {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
