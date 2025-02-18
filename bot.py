@@ -24,7 +24,7 @@ class MeshChain:
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-site',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
+            'User -Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
         }
 
     def clear_terminal(self):
@@ -62,7 +62,7 @@ class MeshChain:
             user_id = str(user_data['id'])
             return user_id
         else:
-            raise ValueError("User data not found in query.")
+            raise ValueError("User  data not found in query.")
     
     def user_signin(self, query: str, user_id: str, retries=3):
         url = 'https://api.meshchain.ai/meshmain/auth/telegram-miniapp-signin'
